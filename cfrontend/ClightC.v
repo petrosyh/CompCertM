@@ -21,7 +21,7 @@ Require Export Clight.
 
 Set Implicit Arguments.
 
-Local Obligation Tactic := ii; ss; des; inv_all_once; ss; clarify; try by (f_equal; determ_tac typify_c_dtm).
+Local Obligation Tactic := ii; ss; des; inv_all_once; ss; clarify; try by f_equal.
 
 (* copied from Cshmgen *)
 Definition signature_of_function (fd: function) :=
@@ -71,7 +71,7 @@ Section MODSEM.
       fptr_arg vs_arg m_arg k retv tv targs tres cconv
       (CSTYLE: Retv.is_cstyle retv)
       (* tyf *)
-      (TYP: typify_c (Retv.v retv) tres tv):
+      (TYP: tv = rettypify (Retv.v retv) (rettype_of_type tres)):
       after_external1 (Callstate fptr_arg (Tfunction targs tres cconv) vs_arg k m_arg)
                      retv
                      (Returnstate tv k (Retv.m retv)).
@@ -101,7 +101,8 @@ Section MODSEM.
       fptr_arg vs_arg m_arg k retv tv targs tres cconv
       (CSTYLE: Retv.is_cstyle retv)
       (* tyf *)
-      (TYP: tv = typify (Retv.v retv) (typ_of_type tres)):
+      (TYP: tv = rettypify (Retv.v retv) (rettype_of_type tres)):
+      (* (TYP: tv = typify (Retv.v retv) (typ_of_type tres)): *)
       after_external2 (Callstate fptr_arg (Tfunction targs tres cconv) vs_arg k m_arg)
                      retv
                      (Returnstate tv k (Retv.m retv)).

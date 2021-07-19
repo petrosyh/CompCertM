@@ -192,7 +192,7 @@ Proof.
         { eapply SimMemInj.inject_separated_frozen; et. }
       }
       { eapply MWFAFTR. }
-      { eapply typify_inject; et. }
+      { eapply inject_rettypify; et. }
   - (* final fsim *)
     inv MATCH. inv FINALSRC; inv MATCHST; ss.
     specialize (MCONT VSet.empty). inv MCONT. inv MCOMPAT; ss.

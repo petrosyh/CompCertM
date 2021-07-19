@@ -1,13 +1,14 @@
 Require Import CoqlibC MapsC.
 Require Import ASTC Integers Floats Values MemoryC Events Globalenvs Smallstep.
 Require Import Locations Stacklayout Conventions Linking.
-Require Export Csem Cop Ctypes Ctyping Csyntax Cexec.
 Require Import Simulation Memory ValuesC.
 Require Import Skeleton ModSem Mod sflib.
-Require Import CtypesC CsemC Sem Syntax LinkingC Program SemProps.
+Require Import CtypesC CsemC.
 Require Import Equality.
-Require Import CtypingC LinkingC2.
 Require Import UpperBound_AExtra.
+Require Export Csem Cop Ctypes Ctyping Csyntax Cexec.
+Require Import Sem Syntax LinkingC Program SemProps.
+Require Import CtypingC LinkingC2.
 
 Set Implicit Arguments.
 
@@ -1068,10 +1069,11 @@ Section PRESERVATION.
                     instantiate (4 := i0). instantiate (1 := cp_link). instantiate (1 := signature_of_function). i.
                     inv H; rewrite DMAP in *; clarify.
                     inv H3. ss. des_ifs. }
+                  unfold signature_of_type, mksignature. ss.
                   rewrite typlist_of_typelist_eq. eauto. hexploit WFPARAM; eauto. }
             { ss. assert(WTPROG: wt_program cp_top).
               { r in FOCUS1. des; clarify; eauto. }
-              bar. inv WTPROG. specialize (H id f).
+              bar. inv WTPROG. specialize (H id (Internal f)).
               assert (Hi: i = id).
               { assert (Genv.find_symbol (SkEnv.project skenv_link (CSk.of_program signature_of_function cp_top)) id = Some blk).
                 { unfold SkEnv.revive in SYMB. ss. }
@@ -1112,19 +1114,19 @@ Section PRESERVATION.
                 exploit prog_defmap_same_rev; eauto. i. Eq.
                 unfold prog_defmap in H4. ss. eapply PTree_Properties.in_of_list. eauto. }
               specialize (H Haux).
-              inv H.
+              inv H. inv H3.
               econs; ss; et.
               { eapply lift_determinate_at.
                 - ss. des_ifs.
                 - econs.
-                  + ii. inv H; inv H3; inv H; inv H4; clarify.
+                  + ii. inv H2; inv H3; inv H2; inv H4; clarify.
                     split. econs. i. unsguard LINKSRC.
                     exploit alloc_variable_dtm. eapply H15. eapply H17. i. des_safe; subst.
                     exploit bind_param_dtm. eapply H16. eapply H18. i. subst. eauto.
                     exploit external_call_match_traces. eapply H13. eapply H14. i. split; auto. i.
                     subst. exploit external_call_deterministic. eapply H13. eapply H14. i. des; subst. auto. auto.
                   + i. inv FINAL.
-                  + ii. inv H; inv H3. ss; omega.
+                  + ii. inv H2; inv H3. ss; omega.
                     eapply external_call_trace_length; eauto. }
               rewrite LINKTGT in *. rpapply step_internal; ss; et. rr. right.
               econs; ss; et.
@@ -1150,7 +1152,7 @@ Section PRESERVATION.
               right. econs; ss; et. des_ifs. unfold Genv.find_funct_ptr. des_ifs. }
             { assert(WTPROG: wt_program cp_top).
               { r in FOCUS1. des; clarify; et. }
-              bar. inv WTPROG. specialize (H id f).
+              bar. inv WTPROG. specialize (H id (Internal f)).
 
               assert (Hi: i = id).
               { assert (Genv.find_symbol (SkEnv.project skenv_link (CSk.of_program signature_of_function cp_top)) id = Some blk).
@@ -1191,7 +1193,7 @@ Section PRESERVATION.
                 exploit prog_defmap_same_rev; eauto. i. Eq.
                 unfold prog_defmap in H4. ss. eapply PTree_Properties.in_of_list. eauto. }
               specialize (H Haux).
-              inv H.
+              inv H. inv H3.
               des_ifs. inv FINDMS. ss. destruct (Ptrofs.eq_dec Ptrofs.zero Ptrofs.zero); ss.
               eapply preservation_cp_focus; et; revgoals.
               { right. eapply step_internal_function; ss; et.
@@ -1219,7 +1221,7 @@ Section PRESERVATION.
                     destruct ((prog_defmap (CSk.of_program signature_of_function cp_top)) ! id) eqn:DMAP; ss. clarify.
 
                     exploit (CSk.of_program_prog_defmap cp_top signature_of_function).
-                    i. inv H. rewrite DMAP in *. clarify.
+                    i. inv H2. rewrite DMAP in *. clarify.
                     assert (exists if_sig, (prog_defmap cp_top) ! id = Some (Gfun (Internal if_sig))).
                     { rewrite DMAP in *. inv H5. unfold CtypesC.CSk.match_fundef in H6. destruct f1; destruct f2; eauto; clarify. inv H4. } des_safe.
                     destruct (is_focus_precise _ FOCUS1). exploit P2GE; eauto. i. des_safe. des_ifs.
@@ -1293,7 +1295,6 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
           rr in STEP. des; inv STEP; ss.
           inv SUM; ss.
           rr in CALL. destruct k0; ss. ss. clarify.
-          hexploit (typify_c_ex v_ret _tres). i; des.
           esplits; eauto.
           + left. split; ss.
             eapply plus_two with (t1 := E0) (t2 := E0); ss.
@@ -1306,7 +1307,6 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
                 - ii. inv H; inv H0. }
               ss. des_ifs.
               econs 4; ss; et.
-              econs; ss; et.
             * econs; et.
               { eapply lift_determinate_at.
                 ss. des_ifs.
@@ -1322,20 +1322,22 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
               econs; ss; et.
           + right. ss. eapply CIH; eauto.
             econs; ss; et.
+            replace (rettypify v_ret (rettype_of_type _tres)) with v_ret; cycle 1.
+            { desH K0. inv K0. inv WTSRC. inv WTK.
+              unfold rettypify. des_ifs; ss.
+              exfalso. eapply n. eapply wt_retval_has_rettype. et. }
             unfold Frame.update_st. ss.
             rewrite app_comm_cons.
             econs 3; ss; et.
             econs; ss; et.
-            { assert(v_ret = tv).
-              { inv WTSRC. inv TYP; ss. clarify.
-                inv WTK. ss. }
-              clarify. econs; ss; et. }
+            { unfold rettypify. des_ifs.
+              econs; ss; et. }
             { eapply preservation_cp_link; et.
               right. econs; ss; et. }
             { des_ifs.
-              assert(WTTGT1: wt_state cp0 (geof cp0) (Returnstate tv (Kcall _f _e _C _tres _k) (m_ret))).
+              assert(WTTGT1: wt_state cp0 (geof cp0) (Returnstate v_ret (Kcall f0 e0 e1 t k0) (m_ret))).
               { econs; ss; et; revgoals.
-                { eapply typify_c_spec; et. }
+                { desH K0. inv K0. inv WTSRC. inv WTK. et. }
                 { inv WTTGT0. ss. clarify. }
                 { inv WTTGT0. des_safe. } }
               eapply preservation_cp_focus; et; cycle 1.
@@ -1380,19 +1382,16 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
                   - ii. inv H2; inv H3. }
                 ss. des_ifs.
                 econs 4; ss; et.
-                econs; ss; et.
               + right. eapply CIH; eauto. unfold Frame.update_st. econs; ss; et.
                 rewrite app_comm_cons.
                 econs 3; ss; et.
                 econs; ss; et.
                 { econs; ss; et. }
-                { inv WTSRC0.
-                  econs; ss; et. clarify.
-                  eapply typify_c_spec; et. }
+                { inv WTSRC0. econs; ss; et. clarify. eapply rettypify_wt_ret_val. }
                 { assert(WTTGT1: wt_state cp0 (geof cp0)
-                                          (Returnstate tv k2 m_ret)).
+                                          (Returnstate (rettypify v_ret (rettype_of_type tres)) k2 m_ret)).
                   { econs; ss; et; revgoals.
-                    { eapply typify_c_spec; et. }
+                    { eapply rettypify_wt_ret_val. }
                     { inv WTTGT0. ss. clarify. }
                     inv WTTGT0. ss. }
                   ss. } }
@@ -1442,15 +1441,15 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
                 econs; ss; et.
                 { econs; ss; et. }
                 { assert(WTSRC0: wt_state cp_link ge_cp_link
-                                          (Returnstate tv (app_cont k2 k_tl_tgt) (Retv.m retv))).
+                                          (Returnstate (rettypify (Retv.v retv) (rettype_of_type tres)) (app_cont k2 k_tl_tgt) (Retv.m retv))).
                   { econs; ss; et; revgoals.
-                    { eapply typify_c_spec; et. }
+                    { eapply rettypify_wt_ret_val. }
                     { inv WTSRC. ss. clarify. }
                     inv WTSRC; ss. }
                   ss. }
-                { assert(WTTGT0: wt_state cp (geof cp) (Returnstate tv k2 (Retv.m retv))).
+                { assert(WTTGT0: wt_state cp (geof cp) (Returnstate (rettypify (Retv.v retv) (rettype_of_type tres)) k2 (Retv.m retv))).
                   { econs; ss; et; revgoals.
-                    { eapply typify_c_spec; et. }
+                    { eapply rettypify_wt_ret_val. }
                     { inv WTTGT. ss. clarify. }
                     inv WTTGT; ss. }
                   ss. } } }
@@ -1576,7 +1575,7 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
             des_ifs.
             destruct (Genv.invert_symbol (SkEnv.project skenv_link (CSk.of_program signature_of_function cp_link))); ss. unfold o_bind in H. ss.
             destruct ((prog_defmap cp_link) ! i) eqn:DMAP; ss. clarify.
-            exploit in_prog_defmap; eauto. i. exploit H0; eauto. i. inv H2. eauto. }
+            exploit in_prog_defmap; eauto. i. exploit H0; eauto. i. inv H2. inv H4. eauto. }
         { inv TYP. eapply wt_initial_frame; ss; et.
           i. Eq. exploit WTPROGS; eauto. i. inv H. ss.
           unfold Genv.find_funct in FINDF. des_ifs. rewrite Genv.find_funct_ptr_iff in *.
@@ -1586,7 +1585,7 @@ i. des_safe. inv H0. unfold is_call_cont_strong. auto. }
           unfold prog_defmap in DMAP. eapply PTree_Properties.in_of_list in DMAP.
           clear - DMAP H0.
           exploit H0.
-          { instantiate (2:=i). instantiate (1:=fd0). ss. } i. inv H. eauto. }
+          { instantiate (2:=i). instantiate (1:=(Internal fd0)). ss. } i. inv H. inv H2. eauto. }
         Unshelve.
         all: ss.
   Qed.

@@ -934,7 +934,7 @@ Section PRESERVATION.
         econs; i; ss; eauto. des_ifs.
         unfold Genv.symbol_address in *.
         des_ifs. erewrite <- H5. eauto.
-      + set (if_sig := (mksignature (typlist_of_typelist targs) (Some (typ_of_type tres)) cc true)).
+      + set (if_sig := (mksignature (typlist_of_typelist targs) ((typ_of_type tres)) cc)).
         econs; ss; auto.
         instantiate (1:= if_sig). des_ifs.
   Qed.
@@ -1013,12 +1013,11 @@ Section PRESERVATION.
                          rewrite -> H1 in *.
                          unfold Args.get_fptr in *. des_ifs.
                          determ_tac find_fptr_owner_determ.
-                         subst ms0. exploit find_fptr_owner_determ.
+                         exploit find_fptr_owner_determ.
                          unfold tge, skenv_link, link_sk, link_list. rewrite <- H1 in *. eapply MSFIND.
                          unfold tge, skenv_link, link_sk, link_list. rewrite <- H1 in *. eapply MSFIND0.
                          i. subst ms. rewrite H1. auto.
-                         inversion INIT0; inversion INIT. rewrite CSTYLE in *. clarify.
-                         rewrite H5. rewrite H6. rewrite H7. eauto. }
+                         inversion INIT0; inversion INIT. rewrite CSTYLE in *. clarify. }
                        { inv FINAL. }
                        { red. i. inv H. auto. }
                    --- eapply step_init; ss.
@@ -1073,9 +1072,7 @@ Section PRESERVATION.
                              - inv STEP; inv STEP0.
                              - inv FINAL; inv FINAL0. inv AFTER; inv AFTER0.
                                split; eauto.
-                               { econs. }
-                               { ii; ss. repeat f_equal. des.
-                                 determ_tac typify_c_dtm. } }
+                               { econs. } }
                            { inv FINAL. }
                            { red. i. inv H; auto. inv STEP. }
                        (* step *)
@@ -1083,10 +1080,12 @@ Section PRESERVATION.
                            { instantiate (1 := (Retv.mk vres m')). econs. } ss.
                            assert (after_external (Csem.Callstate fptr (Tfunction targs0 tres0 cc) vs k m)
                                                   (Retv.mk vres m') (Returnstate vres k m')).
-                           { econs. ss. econs. ss.
+                           { econs. ss.
+                             unfold rettypify. des_ifs. exfalso. eapply n. ss.
+                             eapply wt_retval_has_rettype.
                              unfold Genv.find_funct in FPTR. des_ifs. rewrite Genv.find_funct_ptr_iff in *.
-                             exploit Genv.find_def_inversion; eauto. i. des. exploit WT_EXTERNAL. eauto.
-                             exploit external_call_symbols_preserved. eapply senv_equiv_ge_link. eauto. i. eauto. i. eauto. }
+                             exploit Genv.find_def_inversion; eauto. i. des. eapply WT_EXTERNAL. eauto.
+                             eapply external_call_symbols_preserved. eapply senv_equiv_ge_link. eauto. }
                            eauto.
                    --- traceEq.
                 ** traceEq.
@@ -1223,7 +1222,7 @@ Section PRESERVATION.
                 destruct (Genv.find_funct ge (Vptr b Ptrofs.zero)) eqn:HFUNC; ss.
                 destruct f. ss.
                 exploit system_internal; eauto; clarify. des_ifs.
-                rewrite SAME in *. rewrite H4 in *. unfold fundef in *. eauto. i.
+                rewrite H4 in *. unfold fundef in *. eauto. i.
                 clarify.
     (* state *)
     - right. econs; i; ss.
@@ -1392,5 +1391,5 @@ Proof.
     rewrite INTERNAL in *. clarify.
     unfold Genv.find_funct_ptr. des_ifs. }
   { eapply typecheck_program_sound; eauto. }
-  Unshelve. all: econs.
+  Unshelve. all: try econs.
 Qed.

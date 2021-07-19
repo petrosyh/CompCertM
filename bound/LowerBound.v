@@ -233,7 +233,7 @@ Section PRESERVATION.
       + exploit SYMBKEEP; et.
         { erewrite Sk.of_program_defs; et. }
         i; des. ss. congruence.
-      + exploit SYMBDROP; et.
+      + exploit SYMBKEEP; et.
         { erewrite Sk.of_program_defs; et. }
         i; des. ss. congruence.
 
@@ -433,6 +433,8 @@ Section PRESERVATION.
       unfold Genv.find_funct_ptr, Genv.find_def, skdef_of_gdef, fundef in *.
       cinv (mge_defs b_src); des_ifs.
     Qed.
+
+    Require Import Sem.
 
     Lemma system_receptive_at st frs:
         receptive_at (sem prog)
@@ -1170,7 +1172,6 @@ Section PRESERVATION.
             rewrite assign_junk_blocks_nextblock in *.
             unfold Pregmap.set.
             clear - H Heq0. unfold pos_nat_add. ss. des_ifs; split; try extlia.
-            des. destruct n0; clarify; ss; extlia.
 
         - ii. unfold Pregmap.set. des_ifs.
           + cinv (SAME a).
@@ -1221,7 +1222,7 @@ Section PRESERVATION.
       j fr frs p init_rs rs_src rs_tgt m_src m_tgt n P
       (AGREE: agree j rs_src rs_tgt)
       (INJ: Mem.inject j m_src m_tgt)
-      (MEMWF: Mem.unchanged_on (loc_not_writable m_init) m_init m_src)
+      (MEMWF: unchanged_ro m_init m_src)
       (GELE: genv_le (local_genv p) tge)
       (PROGIN: In (AsmC.module p) prog)
       (GEINJECT: skenv_inject skenv_link j m_src)
@@ -1240,7 +1241,7 @@ Section PRESERVATION.
       (PWF: P <2= ~2 (SimMemInj.valid_blocks m_init /2\ loc_not_writable m_init))
       (AGREE: agree j init_rs rs_tgt)
       (INJECT: Mem.inject j m_src m_tgt)
-      (MEMWF: Mem.unchanged_on (loc_not_writable m_init) m_init m_src)
+      (MEMWF: unchanged_ro m_init m_src)
       (GEINJECT: skenv_inject skenv_link j m_src)
       (FPTR: fptr_arg = init_rs # PC)
       (ARGRANGE: Ptrofs.unsigned ofs + 4 * size_arguments sg <= Ptrofs.max_unsigned)
@@ -1262,7 +1263,7 @@ Section PRESERVATION.
       (PWF: P <2= ~2 (SimMemInj.valid_blocks m_init /2\ loc_not_writable m_init))
       (AGREE: agree j init_rs rs_tgt)
       (INJECT: Mem.inject j m_src m_tgt)
-      (MEMWF: Mem.unchanged_on (loc_not_writable m_init) m_init m_src)
+      (MEMWF: unchanged_ro m_init m_src)
       (GEINJECT: skenv_inject skenv_link j m_src)
       (SIG: exists skd, (Genv.find_funct skenv_link) (init_rs # PC)
                         = Some skd /\ Sk.get_csig skd = None)
@@ -1285,14 +1286,14 @@ Section PRESERVATION.
   Qed.
 
   Lemma volatile_readonly m blk
-        (MEMWF: Mem.unchanged_on (loc_not_writable m_init) m_init m)
+        (MEMWF: unchanged_ro m_init m)
         (VOL: Genv.block_is_volatile skenv_link blk)
         ofs:
       loc_not_writable m blk ofs.
   Proof.
     dup INIT_MEM. unfold Sk.load_mem in INIT_MEM0.
     dup VOL. eapply init_volatile_readonly in VOL0.
-    ii. eapply Mem.perm_unchanged_on_2 in H; eauto.
+    ii. eapply unchanged_ro_perm in H; eauto.
     eapply Genv.block_is_volatile_below in VOL.
     unfold Mem.valid_block. erewrite <- Genv.init_mem_genv_next; eauto; ss.
   Qed.
@@ -1543,7 +1544,7 @@ Section PRESERVATION.
         - eapply AGREE0.
         - eapply INJECT1.
         - clear JUNKED.
-          apply mem_readonly_trans with m_src; eauto.
+          etrans; et. eapply unchanged_unchanged_ro.
           apply mem_readonly_trans with m_arg.
           { inv FREE. eapply Mem.unchanged_on_implies; eauto.
             ii. ss. des_ifs. ii. eapply H0. eapply Mem.perm_implies.
@@ -1690,7 +1691,8 @@ Section PRESERVATION.
         + extensionality pr. unfold Pregmap.set. des_ifs; eauto.
           symmetry. eapply EQ. ii. des; clarify.
       - econs; eauto.
-        + etrans; eauto. eapply Mem.unchanged_on_implies with (P:=top2).
+        + etrans; eauto. eapply unchanged_unchanged_ro.
+          eapply Mem.unchanged_on_implies with (P:=top2).
           eapply assign_junk_blocks_unchanged_on. i. ss.
         + cinv GEINJECT. econs; eauto. i. destruct (j b1) eqn:BLK.
           * destruct p0. dup BLK. apply INCR in BLK. clarify.
@@ -1728,7 +1730,7 @@ Section PRESERVATION.
     intros initmem_inject initial_regset_agree TGT_INT_MEM.
     intros st1 INIT. inv INIT. move INITSK at top. clarify. esplits.
     - econs; eauto.
-    - symmetry in H0. subst. econs; ss; try eassumption.
+    - rename INITMEM into INIT_MEM. econs; ss; try eassumption.
       + econs; ss; eauto.
         unfold Genv.symbol_address in *. erewrite <- symb_main. unfold skenv_link in *. des_ifs.
       + instantiate (1:=bot2). ss.
@@ -1811,8 +1813,7 @@ Section PRESERVATION.
     { eapply system_symbols_inject; eauto. }
 
     - ii. des. rewrite <- senv_same in *. esplits; eauto. econs; eauto.
-      + eapply mem_readonly_trans; eauto.
-        eapply asm_step_readonly; eauto.
+      + etrans; et. eapply asm_step_readonly; et.
       + { inv GEINJECT. econs.
           - i. unfold inject_incr in *.
             eapply INCR. eapply DOMAIN. eauto.
@@ -1873,12 +1874,21 @@ Section PRESERVATION.
       destruct st0; ss; clarify. eassumption.
   Qed.
 
-  Lemma Mem_unchanged_on_strengthen P m0 m1:
-      Mem.unchanged_on P m0 m1 <-> Mem.unchanged_on (SimMemInj.valid_blocks m0 /2\ P) m0 m1.
+  Lemma unchanged_ro_aux
+        m0 m1 m2
+        (UNCH1: unchanged_ro m0 m1)
+        (UNCH2: Mem.unchanged_on (SimMemInj.valid_blocks m0 /2\ loc_not_writable m0) m1 m2)
+    :
+      unchanged_ro m0 m2.
   Proof.
-    split; i.
-    - eapply Mem.unchanged_on_implies; eauto. i. des. auto.
-    - eapply Mem.unchanged_on_implies; eauto. ss.
+    inv UNCH1. inversion UNCH2. econs.
+    - r. etrans; et.
+    - ii. eapply unchanged_ro_perm; et. eapply unchanged_on_perm; et.
+      eapply Plt_Ple_trans; et.
+    - ii. eapply unchanged_ro_readonly; et.
+      erewrite <- Mem.loadbytes_unchanged_on_1; et.
+      + eapply Plt_Ple_trans; et.
+      + i. ss. splits; ss. eapply RO; et.
   Qed.
 
   Lemma step_return_simulation
@@ -1914,9 +1924,9 @@ Section PRESERVATION.
       - econs; unfold Frame.update_st; simpl; cycle 5; eauto.
         + eapply inj_range_wf_le; eauto.
         + eapply callee_save_agree; eauto.
-        + rewrite Mem_unchanged_on_strengthen. transitivity retv_m.
-          * rewrite <- Mem_unchanged_on_strengthen.
-            eapply mem_readonly_trans; eauto. eapply mem_free_readonly; eauto.
+        + eapply unchanged_ro_aux with (m1 := retv_m).
+          * etrans; et. eapply unchanged_unchanged_ro.
+            eapply mem_free_readonly; eauto.
           * eapply Mem.unchanged_on_implies; try eapply Mem_unfree_unchanged_on; eauto.
             ii. eapply PWF; eauto.
       - des_ifs; lia. }
@@ -1944,8 +1954,8 @@ Section PRESERVATION.
     { econstructor 2 with (P := (P \2/ brange blk1 (Ptrofs.unsigned ofs) (Ptrofs.unsigned ofs + 4 * size_arguments sg))); ss; eauto.
       - econs; ss; eauto.
       - intros blk ofs0. i. des; eauto. ii.
-        unfold brange in *. des. clarify. eapply H0.
-        eapply Mem.perm_unchanged_on_2; eauto. eapply Mem.perm_cur.
+        unfold brange in *. des. clarify. eapply H0. exfalso.
+        eapply unchanged_ro_perm; et. eapply Mem.perm_cur.
         eapply Mem.perm_implies.
         + eapply Mem.free_range_perm; eauto.
         + econs.
@@ -2259,16 +2269,14 @@ Section PRESERVATION.
           -- eapply Val.hiword_inject; eauto.
           -- eapply Val.loword_inject; eauto.
         * tauto.
-        * rewrite Mem_unchanged_on_strengthen. transitivity retv_m.
-          { rewrite <- Mem_unchanged_on_strengthen.
-            eapply mem_readonly_trans; eauto.
-            apply mem_readonly_trans with m; eauto.
-            - eapply Mem.unchanged_on_implies.
+        * eapply unchanged_ro_aux with (m1 := retv_m).
+          { etrans; et. etrans.
+            - eapply unchanged_unchanged_ro. eapply Mem.unchanged_on_implies.
               + eapply freed_from_unchanged; eauto.
               + ii. ss. des_ifs. ii. eapply H6. eapply Mem.perm_implies.
                 * eapply Mem.perm_cur. eapply freed_from_perm; eauto.
                 * econs.
-            - eapply external_call_readonly; eauto. }
+            - eapply external_call_unchanged_ro; eauto. }
           { eapply Mem.unchanged_on_implies; try eapply Mem_unfree_unchanged_on; eauto.
             ii. eapply PWF; eauto. eapply RANGE. right. clarify. }
         * ss.
